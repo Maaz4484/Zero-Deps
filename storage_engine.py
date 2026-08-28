@@ -1,31 +1,55 @@
 """
-In-Memory Storage Engine Core
-=============================
-Zero-dependency, thread-safe in-memory key-value storage engine.
+In-Memory Storage Engine Core with Write-Ahead Logging
+======================================================
+Zero-dependency, thread-safe in-memory key-value storage engine with WAL support.
 
 Features:
 - Primary dictionary-based key-value store
 - Dedicated TTL expiry tracking dictionary
 - Lazy TTL expiration on access
 - Thread safety via threading.RLock
+- Write-Ahead Logging (WAL) integration for append-only durability
 """
 
 from __future__ import annotations
 
+import pathlib
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+from wal import WALManager
 
 
 class StorageEngine:
     """
-    In-memory key-value storage engine with TTL expiry support and thread-safety.
+    In-memory key-value storage engine with TTL expiry support, thread-safety,
+    and optional append-only Write-Ahead Logging (WAL).
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        wal_path: Optional[Union[str, pathlib.Path]] = None,
+        wal: Optional[WALManager] = None,
+    ) -> None:
         self._data: Dict[str, Any] = {}
         self._expiry: Dict[str, float] = {}
         self._lock = threading.RLock()
+
+        if wal is not None:
+            self._wal: Optional[WALManager] = wal
+            self._owns_wal = False
+        elif wal_path is not None:
+            self._wal = WALManager(wal_path)
+            self._owns_wal = True
+        else:
+            self._wal = None
+            self._owns_wal = False
+
+    @property
+    def wal(self) -> Optional[WALManager]:
+        """Returns the attached WALManager instance, if any."""
+        return self._wal
 
     def _is_expired(self, key: str, now: Optional[float] = None) -> bool:
         """Helper to check if a key has exceeded its expiration timestamp."""
@@ -49,12 +73,16 @@ class StorageEngine:
     def set(self, key: str, value: Any, ttl: Optional[float] = None) -> bool:
         """
         Stores key-value pair with optional TTL in seconds.
+        Logs to WAL before in-memory mutation when WAL is enabled.
         Returns True on success.
         """
         if not isinstance(key, str):
             raise TypeError(f"Key must be a string, got {type(key).__name__}")
 
         with self._lock:
+            if self._wal is not None:
+                self._wal.log_set(key, value, ttl=ttl)
+
             if ttl is not None and ttl <= 0:
                 # Setting with non-positive TTL expires/deletes the key immediately
                 self._data.pop(key, None)
@@ -85,6 +113,7 @@ class StorageEngine:
     def delete(self, key: str) -> bool:
         """
         Deletes key from storage.
+        Logs to WAL before in-memory mutation when WAL is enabled.
         Returns True if the key was present and unexpired, False otherwise.
         """
         if not isinstance(key, str):
@@ -95,6 +124,9 @@ class StorageEngine:
                 return False
 
             if key in self._data:
+                if self._wal is not None:
+                    self._wal.log_delete(key)
+
                 self._data.pop(key, None)
                 self._expiry.pop(key, None)
                 return True
@@ -117,6 +149,7 @@ class StorageEngine:
     def expire(self, key: str, ttl: float) -> bool:
         """
         Sets or updates the TTL (in seconds) for an existing key.
+        Logs to WAL before in-memory mutation when WAL is enabled.
         Returns True if key exists and was updated, False otherwise.
         """
         if not isinstance(key, str):
@@ -125,6 +158,9 @@ class StorageEngine:
         with self._lock:
             if self._purge_if_expired(key) or key not in self._data:
                 return False
+
+            if self._wal is not None:
+                self._wal.log_expire(key, ttl)
 
             if ttl <= 0:
                 self._data.pop(key, None)
@@ -170,9 +206,26 @@ class StorageEngine:
     def flush(self) -> bool:
         """
         Clears all data and expiry entries.
+        Logs to WAL before clearing state when WAL is enabled.
         Returns True.
         """
         with self._lock:
+            if self._wal is not None:
+                self._wal.log_flush()
+
             self._data.clear()
             self._expiry.clear()
             return True
+
+    def close(self) -> None:
+        """Closes the storage engine and any owned WAL manager."""
+        with self._lock:
+            if self._wal is not None and self._owns_wal:
+                self._wal.close()
+
+    def __enter__(self) -> StorageEngine:
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
+

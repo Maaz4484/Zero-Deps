@@ -59,6 +59,21 @@ def parse_command(line):
             raise ProtocolError("invalid_arguments")
         return command, args
 
+    if command == "EXISTS":
+        if len(args) != 1:
+            raise ProtocolError("invalid_arguments")
+        return command, args
+
+    if command == "TTL":
+        if len(args) != 1:
+            raise ProtocolError("invalid_arguments")
+        return command, args
+
+    if command == "FLUSH":
+        if args:
+            raise ProtocolError("invalid_arguments")
+        return command, args
+    
     if command == "STATS":
         if args:
             raise ProtocolError("invalid_arguments")

@@ -1,7 +1,8 @@
 """
-In-Memory Storage Engine Core with Write-Ahead Logging
-======================================================
-Zero-dependency, thread-safe in-memory key-value storage engine with WAL support.
+In-Memory Storage Engine Core with Write-Ahead Logging & Recovery
+=================================================================
+Zero-dependency, thread-safe in-memory key-value storage engine with WAL support
+and crash recovery / replay.
 
 Features:
 - Primary dictionary-based key-value store
@@ -9,6 +10,7 @@ Features:
 - Lazy TTL expiration on access
 - Thread safety via threading.RLock
 - Write-Ahead Logging (WAL) integration for append-only durability
+- Crash recovery / replay from WAL upon initialization
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from wal import WALManager
 class StorageEngine:
     """
     In-memory key-value storage engine with TTL expiry support, thread-safety,
-    and optional append-only Write-Ahead Logging (WAL).
+    append-only Write-Ahead Logging (WAL), and startup crash recovery.
     """
 
     def __init__(
@@ -36,6 +38,17 @@ class StorageEngine:
         self._expiry: Dict[str, float] = {}
         self._lock = threading.RLock()
 
+        target_wal_path: Optional[pathlib.Path] = None
+        if wal is not None:
+            target_wal_path = wal.filepath
+        elif wal_path is not None:
+            target_wal_path = pathlib.Path(wal_path).resolve()
+
+        # Step 1: Replay existing WAL if present to restore in-memory state
+        if target_wal_path is not None and target_wal_path.exists():
+            self._replay_wal(target_wal_path)
+
+        # Step 2: Initialize WAL manager for future write operations
         if wal is not None:
             self._wal: Optional[WALManager] = wal
             self._owns_wal = False
@@ -45,6 +58,68 @@ class StorageEngine:
         else:
             self._wal = None
             self._owns_wal = False
+
+    def _replay_wal(self, wal_path: pathlib.Path) -> None:
+        """
+        Replays WAL records in strict file order to reconstruct the in-memory state.
+        Does not emit new WAL records during replay.
+        """
+        records = WALManager.recover_records(wal_path, truncate_torn_tail=True)
+        now = time.time()
+
+        for rec in records:
+            op = rec.get("op")
+            if op == "SET":
+                key = rec.get("key")
+                if not isinstance(key, str):
+                    continue
+                val = rec.get("value")
+                ttl = rec.get("ttl")
+                ts = rec.get("ts", now)
+
+                if ttl is not None:
+                    if ttl <= 0:
+                        self._data.pop(key, None)
+                        self._expiry.pop(key, None)
+                    else:
+                        expire_at = ts + ttl
+                        if expire_at <= now:
+                            # Already expired at recovery time
+                            self._data.pop(key, None)
+                            self._expiry.pop(key, None)
+                        else:
+                            self._data[key] = val
+                            self._expiry[key] = expire_at
+                else:
+                    self._data[key] = val
+                    self._expiry.pop(key, None)
+
+            elif op == "DELETE":
+                key = rec.get("key")
+                if isinstance(key, str):
+                    self._data.pop(key, None)
+                    self._expiry.pop(key, None)
+
+            elif op == "EXPIRE":
+                key = rec.get("key")
+                if isinstance(key, str) and key in self._data:
+                    ttl = rec.get("ttl")
+                    ts = rec.get("ts", now)
+                    if ttl is not None and ttl <= 0:
+                        self._data.pop(key, None)
+                        self._expiry.pop(key, None)
+                    elif ttl is not None:
+                        expire_at = ts + ttl
+                        if expire_at <= now:
+                            # Expired by recovery time
+                            self._data.pop(key, None)
+                            self._expiry.pop(key, None)
+                        else:
+                            self._expiry[key] = expire_at
+
+            elif op == "FLUSH":
+                self._data.clear()
+                self._expiry.clear()
 
     @property
     def wal(self) -> Optional[WALManager]:
@@ -228,4 +303,3 @@ class StorageEngine:
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         self.close()
-

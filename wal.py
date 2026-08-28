@@ -1,7 +1,8 @@
 """
 Write-Ahead Log (WAL) Manager
 =============================
-Append-only log manager ensuring write durability before in-memory state mutations.
+Append-only log manager ensuring write durability before in-memory state mutations
+and recovery replay support.
 
 Format:
 JSON Lines (jsonl), where each line contains a single serialized JSON object
@@ -21,7 +22,7 @@ import os
 import pathlib
 import threading
 import time
-from typing import Any, Dict, Iterator, Optional, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 
 class WALManager:
@@ -87,21 +88,65 @@ class WALManager:
         self._write_record(record)
 
     @staticmethod
-    def read_from_file(filepath: Union[str, pathlib.Path]) -> Iterator[Dict[str, Any]]:
-        """Reads and yields all valid records from any given WAL file path."""
+    def recover_records(
+        filepath: Union[str, pathlib.Path],
+        truncate_torn_tail: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Parses and recovers valid records from the WAL file.
+        Safely ignores an incomplete/torn final record caused by an interrupted write.
+        Raises ValueError if corruption occurs within prior (middle) records.
+        """
         path = pathlib.Path(filepath).resolve()
         if not path.exists():
-            return
-        with open(path, mode="r", encoding="utf-8") as f:
-            for line in f:
-                stripped = line.strip()
-                if stripped:
-                    yield json.loads(stripped)
+            return []
+
+        with open(path, mode="r", encoding="utf-8", errors="replace") as f:
+            raw_lines = f.readlines()
+
+        indexed_lines = [(i, line.strip()) for i, line in enumerate(raw_lines) if line.strip()]
+        if not indexed_lines:
+            return []
+
+        valid_records: List[Dict[str, Any]] = []
+        has_torn_tail = False
+        last_valid_line_idx = -1
+
+        for pos, (orig_idx, line) in enumerate(indexed_lines):
+            is_last = (pos == len(indexed_lines) - 1)
+            try:
+                record = json.loads(line)
+                valid_records.append(record)
+                last_valid_line_idx = orig_idx
+            except json.JSONDecodeError as err:
+                if is_last:
+                    # Torn write at the end of the log
+                    has_torn_tail = True
+                else:
+                    # Non-final corrupted record
+                    raise ValueError(
+                        f"Corrupted WAL record at line {orig_idx + 1}: {err}"
+                    ) from err
+
+        if has_torn_tail and truncate_torn_tail:
+            valid_content = "".join(raw_lines[: last_valid_line_idx + 1]) if last_valid_line_idx >= 0 else ""
+            if valid_content and not valid_content.endswith("\n"):
+                valid_content += "\n"
+            with open(path, mode="w", encoding="utf-8") as f:
+                f.write(valid_content)
+                f.flush()
+                os.fsync(f.fileno())
+
+        return valid_records
+
+    @staticmethod
+    def read_from_file(filepath: Union[str, pathlib.Path]) -> Iterator[Dict[str, Any]]:
+        """Reads and yields all valid records from any given WAL file path."""
+        records = WALManager.recover_records(filepath, truncate_torn_tail=False)
+        yield from records
 
     def read_records(self) -> Iterator[Dict[str, Any]]:
-        """
-        Yields all parsed records from this WAL file.
-        """
+        """Yields all parsed records from this WAL file."""
         yield from self.read_from_file(self.filepath)
 
     def close(self) -> None:

@@ -1,33 +1,34 @@
 # NoDepDB
 
-**NoDepDB** is a zero-dependency key-value database built for the **Unstop Zero Dependency Hackathon**. It demonstrates how a functional client-server database system can be built using only a programming language’s standard library—without external packages, frameworks, or database libraries.
-
+**NoDepDB** is a zero-dependency key-value database built for the **Unstop Zero Dependency Hackathon**. It demonstrates how a functional client-server database system can be built using only a programming language's standard library—without external packages, frameworks, or database libraries.
 
 ## Introduction
+
 Modern applications often rely on many external dependencies for networking, storage, serialization, testing, and command-line interfaces. While useful, these dependencies can add installation complexity, compatibility issues, security concerns, and maintenance overhead.
 
 NoDepDB takes a different approach: it provides a lightweight database experience using only built-in language capabilities. The project includes a TCP server, storage engine, network protocol, CLI client, interactive REPL, batch execution, and integration tests.
 
-
 ## Problem Statement
-Build a functional database system without using any third-party packages.
-The system must support client-server communication, persistent or in-memory data storage, command parsing, error handling, and a usable command-line interface while maintaining strict standard-library-only compliance.
 
+Build a functional database system without using any third-party packages. The system must support client-server communication, persistent or in-memory data storage, command parsing, error handling, and a usable command-line interface while maintaining strict standard-library-only compliance.
 
 ## Why Zero Dependency?
+
 A zero-dependency project is easier to understand, run, audit, and distribute.
 
 Benefits include:
+
 - No package installation or dependency conflicts
 - Smaller deployment footprint
 - Reduced supply-chain risk
 - Easier portability across environments
 - Better understanding of core networking and storage concepts
 - Faster onboarding for contributors and hackathon evaluators
+
 NoDepDB intentionally focuses on fundamentals: sockets, files, parsing, command execution, and data structures.
 
-
 ## Project Goals
+
 - Build a functional TCP-based key-value database.
 - Use only standard library modules.
 - Provide a simple text-based request/response protocol.
@@ -38,6 +39,7 @@ NoDepDB intentionally focuses on fundamentals: sockets, files, parsing, command 
 - Keep the architecture simple, modular, and beginner-friendly.
 
 ## System Architecture
+
 ```text
 +-----------------------+
 |      CLI Client       |
@@ -73,20 +75,22 @@ NoDepDB intentionally focuses on fundamentals: sockets, files, parsing, command 
 The storage engine manages database records and implements core key-value operations.
 
 Responsibilities include:
+
 - Storing keys and values
 - Retrieving values
 - Deleting records
 - Checking whether keys exist
 - Listing keys
-- Reporting database statistics
 - Optionally persisting data to disk
+
 The initial implementation can use an in-memory dictionary or map. If persistence is enabled, the storage engine may serialize data to a local file using standard library file and serialization utilities.
 
-
 ### Network Layer
+
 The network layer enables communication between clients and the NoDepDB server through TCP sockets.
 
 Responsibilities include:
+
 - Binding the server to a host and port
 - Accepting incoming client connections
 - Reading client requests
@@ -94,15 +98,16 @@ Responsibilities include:
 - Handling connection failures gracefully
 - Supporting configurable host and port values
 
-
 ### Protocol Layer
-The protocol layer defines how clients and servers exchange commands and responses.
-NoDepDB uses a simple text-based command format:
+
+The protocol layer defines how clients and servers exchange commands and responses. NoDepDB uses a simple text-based command format:
+
 ```text
 COMMAND argument1 argument2
 ```
 
 Example:
+
 ```text
 SET username alice
 ```
@@ -146,7 +151,6 @@ It supports:
 | `EXISTS key` | Checks whether a key exists | `EXISTS name` |
 | `KEYS` | Lists all stored keys | `KEYS` |
 | `PING` | Checks server availability | `PING` |
-| `STATS` | Returns database statistics | `STATS` |
 
 ## Example Usage
 
@@ -238,9 +242,6 @@ TRUE
 nodepdb> KEYS
 user
 
-nodepdb> STATS
-keys=1
-
 nodepdb> EXIT
 Disconnected.
 ```
@@ -256,7 +257,6 @@ SET project NoDepDB
 SET event Unstop Hackathon
 GET project
 KEYS
-STATS
 ```
 
 Run the batch file:
@@ -273,25 +273,26 @@ OK
 VALUE NoDepDB
 event
 project
-keys=2
 ```
 
-## PING and STATS Commands
+## PING Command
 
-### PING
 `PING` verifies that the server is reachable and responding.
+
 ```bash
 python client.py PING
 ```
+
 Expected response:
 
 ```text
 PONG
 ```
+
 This command is useful for health checks, debugging, and connection validation.
 
-
 ## Testing Strategy
+
 NoDepDB uses integration-focused testing to validate the complete system flow.
 
 Tests should verify:
@@ -300,7 +301,7 @@ Tests should verify:
 - Client connection behavior
 - Retry behavior during temporary connection failures
 - `SET`, `GET`, `DELETE`, and `EXISTS` operations
-- `KEYS`, `PING`, and `STATS` responses
+- `KEYS` and `PING` responses
 - Invalid command handling
 - Batch command execution
 - Protocol parsing
@@ -319,7 +320,6 @@ Example integration flow:
 ```
 
 All tests are implemented with standard library testing tools only.
-
 
 ## Project Structure
 
@@ -352,11 +352,12 @@ tests/         Contains unit and integration tests
 data/          Holds optional persistent database files
 ```
 
-
 ## Standard Library Compliance
+
 NoDepDB is built with **only standard library modules**.
 
 Typical built-in modules used may include:
+
 ```text
 socket       TCP server and client communication
 argparse     Command-line argument parsing
@@ -367,10 +368,11 @@ os           Environment and filesystem utilities
 time         Retry delays and timestamps
 unittest     Testing framework
 ```
+
 No external package manager, framework, ORM, networking library, or database library is required.
 
-
 ## Team Roles
+
 Suggested team responsibilities:
 
 | Role | Responsibilities |
@@ -384,9 +386,10 @@ Suggested team responsibilities:
 
 In a small hackathon team, contributors may own multiple areas.
 
-
 ## Future Improvements
+
 Potential future enhancements include:
+
 - Durable write-ahead logging
 - Improved persistence and recovery
 - Namespaces or logical databases
@@ -400,9 +403,8 @@ Potential future enhancements include:
 - Metrics and observability endpoints
 - Client libraries for additional languages
 
-
-
 ## Conclusion
+
 NoDepDB proves that a practical database system can be built from first principles using only the standard library. It combines networking, protocol design, storage management, command-line tooling, and testing into a focused learning project.
 
 The project is intentionally simple, transparent, and dependency-free—making it ideal for demonstrating core systems-programming concepts in the Unstop Zero Dependency Hackathon.

@@ -21,7 +21,7 @@
 
 ### Testing
 - [ ] Fresh clone tested end-to-end following only the written docs
-- [ ] Core commands (`SET`/`GET`/`DELETE`) verified working
+- [ ] Core commands (`SET`/`GET`/`DEL`) verified working
 - [ ] Invalid input tested (doesn't crash server or client)
 
 ### Team / Branches

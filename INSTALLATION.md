@@ -17,7 +17,7 @@ cd Zero-Deps
 In one terminal window:
 
 ```bash
-python server.py
+python nodepdb/server.py
 ```
 
 This starts the NoDepDB server, listening on `127.0.0.1:6380`.
@@ -68,7 +68,7 @@ Type `EXIT` to disconnect and close the client.
 
 ## Troubleshooting
 
-- **"Connection refused" error:** Make sure `server.py` is running first,
+- **"Connection refused" error:** Make sure `nodepdb/server.py` is running first,
   in its own terminal, before starting `client.py`.
 - **Port already in use:** Another process may already be using port
   6380. Close other running instances of the server and try again.

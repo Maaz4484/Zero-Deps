@@ -291,26 +291,6 @@ PONG
 This command is useful for health checks, debugging, and connection validation.
 
 
-### STATS
-`STATS` returns basic database information.
-```bash
-python client.py STATS
-```
-Example response:
-
-```text
-keys=12
-```
-Depending on the implementation, future versions may include:
-
-```text
-keys=12
-connections=4
-uptime_seconds=3600
-storage_mode=persistent
-```
-
-
 ## Testing Strategy
 NoDepDB uses integration-focused testing to validate the complete system flow.
 

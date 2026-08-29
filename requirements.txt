@@ -1,0 +1,8 @@
+# NoDepDB has ZERO third-party dependencies.
+#
+# This file is intentionally empty — do not add any packages here.
+# The project runs using only Python's standard library.
+#
+# If you find yourself wanting to add something here, that's a sign
+# a stdlib alternative should be used instead. See STDLIB.md for the
+# substitutions already documented.

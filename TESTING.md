@@ -7,7 +7,7 @@ not your existing working folder, which may have leftover state.
 
 ### 1. Server starts correctly
 ```bash
-python server.py
+python nodepdb/server.py
 ```
 - [ ] Server starts without errors
 - [ ] Prints a message confirming it's listening (e.g. on port 6380)
